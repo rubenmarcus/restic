@@ -493,15 +493,22 @@ func (be *s3) requestRestore(ctx context.Context, filename string) (bool, error)
 
 	if err := be.client.RestoreObject(ctx, be.cfg.Bucket, filename, "", opts); err != nil {
 		var e minio.ErrorResponse
-		if errors.As(err, &e) {
-			switch e.Code {
-			case "InvalidObjectState":
-				return false, nil
-			case "RestoreAlreadyInProgress":
-				return true, nil
-			}
+		if !errors.As(err, &e) {
+			return false, err
 		}
-		return false, err
+
+		switch e.Code {
+		case "InvalidObjectState":
+			// S3 refuses to start another restore while one is already running for
+			// the object. The object is not warm yet, thus keep reporting it as
+			// warming up. Treating it as already warm makes callers read the
+			// archived pack right away and retry that forever.
+			debug.Log("s3 restore request for %v was rejected: %v", filename, err)
+		case "RestoreAlreadyInProgress":
+			return true, nil
+		default:
+			return false, err
+		}
 	}
 
 	isWarmingUp := ws != warmupStatusLukewarm
