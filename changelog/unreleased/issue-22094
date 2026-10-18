@@ -1,0 +1,8 @@
+Bugfix: Keep waiting for S3 cold objects after rejected restore requests
+
+Restic could stop waiting for a cold S3 object when S3 rejected a duplicate
+restore request with `InvalidObjectState`. It then tried to read the archived
+pack and retried indefinitely. Restic now keeps the pack in the warming-up
+list until it becomes readable or the restore timeout expires.
+
+https://github.com/restic/restic/issues/22094
